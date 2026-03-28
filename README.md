@@ -138,8 +138,15 @@ sudo apt install -y caddy
 ```bash
 cd /opt
 sudo git clone <repo-url> jarekru
+
+# Сервисный пользователь (без домашней директории, без логина)
+sudo useradd -r -s /usr/sbin/nologin photoweb
+sudo chown -R photoweb:photoweb /opt/jarekru
+
+# Виртуальное окружение
 cd /opt/jarekru/web
-sudo pip install -r requirements.txt
+sudo -u photoweb python3 -m venv /opt/jarekru/venv
+sudo -u photoweb /opt/jarekru/venv/bin/pip install -r requirements.txt
 ```
 
 Положить фотографии в `data/{01..12}/` (или загрузить в `data/input/` и обработать через `image-editor/process.py`).
@@ -154,8 +161,10 @@ Description=Photo of the Month
 After=network.target
 
 [Service]
+User=photoweb
+Group=photoweb
 WorkingDirectory=/opt/jarekru/web
-ExecStart=uvicorn server:app --host 127.0.0.1 --port 8000
+ExecStart=/opt/jarekru/venv/bin/uvicorn server:app --host 127.0.0.1 --port 8000
 Restart=always
 RestartSec=5
 
@@ -184,6 +193,29 @@ photo.example.com {
         }
         format json
     }
+
+    # Заголовки безопасности
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Content-Security-Policy "default-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
+        -Server
+    }
+
+    # Фото отдаёт Caddy напрямую (zero-copy, без Python)
+    handle /photos/* {
+        @badpath not path_regexp ^/photos/\d{2}/[a-f0-9\-]+\.(jpg|jpeg|png|webp)$
+        respond @badpath 404
+
+        uri strip_prefix /photos
+        root * /opt/jarekru/data
+        header Cache-Control "public, max-age=86400, immutable"
+        file_server {
+            index ""
+        }
+    }
+
+    # API и статика — через uvicorn
     reverse_proxy 127.0.0.1:8000
 }
 ```
@@ -200,7 +232,20 @@ sudo systemctl reload caddy
 
 Caddy автоматически получит сертификат Let's Encrypt и настроит редирект HTTP → HTTPS. Продление сертификатов — тоже автоматическое, без дополнительной настройки.
 
-#### 5. Проверка
+#### 5. Firewall (ufw)
+
+Закрываем прямой доступ к порту 8000 — только Caddy должен проксировать запросы:
+
+```bash
+sudo ufw allow OpenSSH
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
+```
+
+Порт 8000 не открыт → uvicorn доступен только через Caddy.
+
+#### 6. Проверка
 
 ```bash
 sudo systemctl status photo-web    # uvicorn работает
@@ -210,7 +255,7 @@ curl -I https://photo.example.com   # 200 OK, HTTPS
 
 Сайт доступен по `https://photo.example.com`.
 
-#### 6. Защита от ботов — fail2ban
+#### 7. Защита от ботов — fail2ban
 
 Боты массово сканируют серверы в поисках уязвимостей (`/wp-admin`, `/.env`, `/phpmyadmin` и т.д.). fail2ban анализирует логи Caddy и банит IP-адреса, которые генерируют подозрительные запросы.
 

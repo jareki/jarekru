@@ -51,6 +51,8 @@
         if (!res.ok) throw new Error(await res.text());
         const { url } = await res.json();
 
+        if (url === current.src || url === current.getAttribute('src')) return;
+
         const target = next();
         target.onload = () => {
           current.classList.remove('active');
@@ -69,7 +71,13 @@
       const cfg = await fetch('/api/config').then(r => r.json());
       const interval = (cfg.interval_seconds || 5) * 1000;
       await loadPhoto();
-      setInterval(loadPhoto, interval);
+      let expected = Date.now() + interval;
+      setTimeout(function tick() {
+        const drift = Date.now() - expected;
+        loadPhoto();
+        expected += interval;
+        setTimeout(tick, Math.max(0, interval - drift));
+      }, interval);
     }
 
     start();
