@@ -1,0 +1,6 @@
+{
+  "data_path": "../data",
+  "input_path": "../data/input",
+  "max_size": 1080,
+  "quality": 90
+}
