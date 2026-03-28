@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Photo of the Month</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; overflow: hidden; width: 100vw; height: 100vh; }
+
+    .photo {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0;
+      transition: opacity 1s ease;
+    }
+    .photo.active { opacity: 1; }
+
+    #error {
+      display: none;
+      position: absolute;
+      inset: 0;
+      color: #555;
+      font: 1.2rem/1.5 sans-serif;
+      justify-content: center;
+      align-items: center;
+    }
+  </style>
+</head>
+<body>
+  <img class="photo" id="a">
+  <img class="photo" id="b">
+  <div id="error"></div>
+
+  <script>
+    const imgA = document.getElementById('a');
+    const imgB = document.getElementById('b');
+    const errorEl = document.getElementById('error');
+    let current = imgA;
+
+    function next() {
+      return current === imgA ? imgB : imgA;
+    }
+
+    async function loadPhoto() {
+      try {
+        const res = await fetch('/api/photo');
+        if (!res.ok) throw new Error(await res.text());
+        const { url } = await res.json();
+
+        const target = next();
+        target.onload = () => {
+          current.classList.remove('active');
+          target.classList.add('active');
+          current = target;
+        };
+        target.src = url;
+        errorEl.style.display = 'none';
+      } catch (e) {
+        errorEl.textContent = 'No photos for this month';
+        errorEl.style.display = 'flex';
+      }
+    }
+
+    async function start() {
+      const cfg = await fetch('/api/config').then(r => r.json());
+      const interval = (cfg.interval_seconds || 5) * 1000;
+      await loadPhoto();
+      setInterval(loadPhoto, interval);
+    }
+
+    start();
+  </script>
+</body>
+</html>
