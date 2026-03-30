@@ -6,8 +6,9 @@
 
 ```
 image-editor/
-  process.py      — скрипт обработки фото
-  config.json     — настройки обработки
+  process.py       — скрипт обработки фото
+  config.json      — настройки обработки
+  requirements.txt — зависимости (Pillow)
 web/
   server.py       — веб-сервер (FastAPI)
   config.json     — настройки веб-сервера
@@ -40,8 +41,10 @@ data/
 git clone <repo-url>
 cd jarekru
 
-# Зависимости
-pip install Pillow
+# Виртуальное окружение и зависимости
+python3 -m venv venv
+source venv/bin/activate
+pip install -r image-editor/requirements.txt
 
 # Создание входной папки
 mkdir -p data/input
@@ -61,7 +64,7 @@ crontab -e
 Добавить строку (запуск каждые 5 минут):
 
 ```
-*/5 * * * * cd /path/to/jarekru && python3 image-editor/process.py >> /var/log/image-editor.log 2>&1
+*/5 * * * * cd /path/to/jarekru && venv/bin/python image-editor/process.py >> /var/log/image-editor.log 2>&1
 ```
 
 Замените `/path/to/jarekru` на реальный путь к проекту. Интервал `*/5` можно изменить — например, `*/1` для проверки каждую минуту или `0 * * * *` для запуска раз в час.
@@ -131,6 +134,10 @@ curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --d
 curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
 sudo apt update
 sudo apt install -y caddy
+
+# Директория для логов Caddy
+sudo mkdir -p /var/log/caddy
+sudo chown -R caddy:caddy /var/log/caddy
 ```
 
 #### 2. Клонирование и настройка проекта
@@ -142,6 +149,10 @@ sudo git clone <repo-url> jarekru
 # Сервисный пользователь (без домашней директории, без логина)
 sudo useradd -r -s /usr/sbin/nologin photoweb
 sudo chown -R photoweb:photoweb /opt/jarekru
+sudo chmod -R g+rX /opt/jarekru
+
+# Caddy → группа photoweb (для раздачи фото напрямую)
+sudo usermod -aG photoweb caddy
 
 # Виртуальное окружение
 cd /opt/jarekru/web
@@ -204,12 +215,13 @@ photo.example.com {
 
     # Фото отдаёт Caddy напрямую (zero-copy, без Python)
     handle /photos/* {
-        @badpath not path_regexp ^/photos/\d{2}/[a-f0-9\-]+\.(jpg|jpeg|png|webp)$
+        uri strip_prefix /photos
+        @badpath not path_regexp ^/\d{2}/[a-f0-9\-]+\.(jpg|jpeg|png|webp)$
         respond @badpath 404
 
-        uri strip_prefix /photos
         root * /opt/jarekru/data
-        header Cache-Control "public, max-age=86400, immutable"
+        @goodpath path_regexp ^/\d{2}/[a-f0-9\-]+\.(jpg|jpeg|png|webp)$
+        header @goodpath Cache-Control "public, max-age=86400, immutable"
         file_server {
             index ""
         }

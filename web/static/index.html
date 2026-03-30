@@ -19,6 +19,28 @@
     }
     .photo.active { opacity: 1; }
 
+    #title {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 10;
+      color: #fff;
+      font: bold clamp(1.5rem, 5vw, 4rem)/1.2 sans-serif;
+      text-align: center;
+      letter-spacing: 0.1em;
+      text-shadow:
+        -2px -2px 0 #000,
+         2px -2px 0 #000,
+        -2px  2px 0 #000,
+         2px  2px 0 #000,
+         0   -2px 0 #000,
+         0    2px 0 #000,
+        -2px  0   0 #000,
+         2px  0   0 #000;
+      pointer-events: none;
+    }
+
     #error {
       display: none;
       position: absolute;
@@ -33,6 +55,7 @@
 <body>
   <img class="photo" id="a">
   <img class="photo" id="b">
+  <div id="title">PHOTOS OF THE MONTH</div>
   <div id="error"></div>
 
   <script>
