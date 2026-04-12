@@ -96,12 +96,16 @@ def get_config():
     return {"interval_seconds": config.get("interval_seconds", 5)}
 
 
-INDEX_HTML = (BASE_DIR / "static" / "index.html").read_text(encoding="utf-8")
+INDEX_PATH = BASE_DIR / "static" / "index.html"
+STYLE_PATH = BASE_DIR / "static" / "style.css"
 
 
 @app.get("/")
 def index():
-    return HTMLResponse(INDEX_HTML)
+    html = INDEX_PATH.read_text(encoding="utf-8")
+    style_mtime = int(STYLE_PATH.stat().st_mtime)
+    html = html.replace("/static/style.css", f"/static/style.css?v={style_mtime}")
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
 
 
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
