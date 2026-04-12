@@ -17,9 +17,28 @@ with open(BASE_DIR / "config.json") as f:
 DATA_DIR = (BASE_DIR / config["data_path"]).resolve()
 
 interval = config.get("interval_seconds", 5)
+square_tolerance = config.get("square_tolerance", 0.1)
 # Разрешаем чуть больше запросов, чем нужно слайдшоу (x2), но не менее 2/мин
 rate_per_minute = max(2, math.ceil(60 / interval * 2))
 PHOTO_RATE_LIMIT = f"{rate_per_minute}/minute"
+
+
+def pick_bucket(ar: float | None) -> str:
+    """H — только горизонтальные, V — только вертикальные, both — все."""
+    if ar is None:
+        return "both"
+    if ar > 1 + square_tolerance:
+        return "H"
+    if ar < 1 - square_tolerance:
+        return "V"
+    return "both"
+
+
+def matches_bucket(name: str, bucket: str) -> bool:
+    if bucket == "both":
+        return True
+    stem = name.rsplit(".", 1)[0]
+    return stem.endswith(f"_{bucket}")
 
 def get_real_ip(request: Request) -> str:
     """Получаем реальный IP клиента из X-Forwarded-For (Caddy) или напрямую."""
@@ -29,18 +48,22 @@ def get_real_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-_photo_cache: dict[int, list[str]] = {}
+_photo_cache: dict[tuple[int, str], list[str]] = {}
 
 
-def get_photos(month_dir: Path, slot: int) -> list[str]:
+def get_photos(month_dir: Path, slot: int, bucket: str) -> list[str]:
     """Кэшируем список фото на время одного слота (избегаем iterdir на каждый запрос)."""
-    if slot not in _photo_cache:
-        _photo_cache.clear()
-        _photo_cache[slot] = sorted(
+    key = (slot, bucket)
+    if key not in _photo_cache:
+        # Очищаем кэш при смене слота
+        if _photo_cache and next(iter(_photo_cache))[0] != slot:
+            _photo_cache.clear()
+        all_photos = sorted(
             p.name for p in month_dir.iterdir()
             if p.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp")
         )
-    return _photo_cache[slot]
+        _photo_cache[key] = [n for n in all_photos if matches_bucket(n, bucket)]
+    return _photo_cache[key]
 
 
 limiter = Limiter(key_func=get_real_ip)
@@ -51,18 +74,19 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 @app.get("/api/photo")
 @limiter.limit(PHOTO_RATE_LIMIT)
-def random_photo(request: Request):
+def random_photo(request: Request, ar: float | None = None):
     month = datetime.now().strftime("%m")
     month_dir = DATA_DIR / month
     if not month_dir.is_dir():
         raise HTTPException(404, f"No folder for month {month}")
 
-    # Все клиенты в пределах одного time-slot получают одно и то же фото
+    bucket = pick_bucket(ar)
+    # Все клиенты в пределах одного time-slot и bucket'а получают одно и то же фото
     slot = int(datetime.now().timestamp()) // interval
-    photos = get_photos(month_dir, slot)
+    photos = get_photos(month_dir, slot, bucket)
     if not photos:
         raise HTTPException(404, "No photos for this month")
-    rng = random.Random(slot)
+    rng = random.Random((slot, bucket))
     name = rng.choice(photos)
     return {"url": f"/photos/{month}/{name}"}
 

@@ -3,7 +3,7 @@ import uuid
 import sys
 from pathlib import Path
 
-from PIL import Image, ExifTags
+from PIL import Image, ImageOps, ExifTags
 
 EXIF_DATE_TAG = 36867  # DateTimeOriginal
 
@@ -47,6 +47,9 @@ def process_image(src: Path, dest_dir: Path, max_size: int, quality: int) -> boo
         out_dir = dest_dir / month
         out_dir.mkdir(parents=True, exist_ok=True)
 
+        # Apply EXIF orientation so physical pixels match visual orientation
+        img = ImageOps.exif_transpose(img)
+
         # Convert to RGB if needed (e.g. RGBA PNGs saved as .jpg)
         if img.mode != "RGB":
             img = img.convert("RGB")
@@ -54,8 +57,10 @@ def process_image(src: Path, dest_dir: Path, max_size: int, quality: int) -> boo
         # Resize keeping aspect ratio (only shrinks, never enlarges)
         img.thumbnail((max_size, max_size), Image.LANCZOS)
 
+        orientation = "_H" if img.width >= img.height else "_V"
+
         # Save without EXIF
-        out_path = out_dir / f"{uuid.uuid4()}.jpg"
+        out_path = out_dir / f"{uuid.uuid4()}{orientation}.jpg"
         img.save(out_path, "JPEG", quality=quality)
         print(f"  OK: {src.name} -> {month}/{out_path.name}")
         return True
