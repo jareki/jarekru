@@ -86,7 +86,7 @@ def random_photo(request: Request, ar: float | None = None):
     photos = get_photos(month_dir, slot, bucket)
     if not photos:
         raise HTTPException(404, "No photos for this month")
-    rng = random.Random((slot, bucket))
+    rng = random.Random(f"{slot}:{bucket}")
     name = rng.choice(photos)
     return {"url": f"/photos/{month}/{name}"}
 

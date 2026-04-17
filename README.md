@@ -216,11 +216,11 @@ photo.example.com {
     # Фото отдаёт Caddy напрямую (zero-copy, без Python)
     handle /photos/* {
         uri strip_prefix /photos
-        @badpath not path_regexp ^/\d{2}/[a-f0-9\-]+\.(jpg|jpeg|png|webp)$
+        @badpath not path_regexp ^/\d{2}/[a-f0-9\-]+(_[HV])?\.(jpg|jpeg|png|webp)$
         respond @badpath 404
 
         root * /opt/jarekru/data
-        @goodpath path_regexp ^/\d{2}/[a-f0-9\-]+\.(jpg|jpeg|png|webp)$
+        @goodpath path_regexp ^/\d{2}/[a-f0-9\-]+(_[HV])?\.(jpg|jpeg|png|webp)$
         header @goodpath Cache-Control "public, max-age=86400, immutable"
         file_server {
             index ""
@@ -257,7 +257,19 @@ sudo ufw enable
 
 Порт 8000 не открыт → uvicorn доступен только через Caddy.
 
-#### 6. Проверка
+#### 6. Перезапуск после обновления файлов
+
+| Что изменилось | Нужен перезапуск | Команда |
+|---|---|---|
+| `web/server.py` | photo-web | `sudo systemctl restart photo-web` |
+| `web/config.json` | photo-web | `sudo systemctl restart photo-web` |
+| `web/requirements.txt` | photo-web (после `pip install -r`) | `sudo systemctl restart photo-web` |
+| `web/static/*` (HTML, CSS, JS) | нет | отдаются с диска при каждом запросе |
+| `data/01..12/*` (фотографии) | нет | подхватываются автоматически |
+| `/etc/caddy/Caddyfile` | caddy | `sudo systemctl reload caddy` |
+| `image-editor/*` | нет | запускается вручную или по cron |
+
+#### 7. Проверка
 
 ```bash
 sudo systemctl status photo-web    # uvicorn работает
@@ -267,7 +279,7 @@ curl -I https://photo.example.com   # 200 OK, HTTPS
 
 Сайт доступен по `https://photo.example.com`.
 
-#### 7. Защита от ботов — fail2ban
+#### 8. Защита от ботов — fail2ban
 
 Боты массово сканируют серверы в поисках уязвимостей (`/wp-admin`, `/.env`, `/phpmyadmin` и т.д.). fail2ban анализирует логи Caddy и банит IP-адреса, которые генерируют подозрительные запросы.
 
