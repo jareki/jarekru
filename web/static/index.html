@@ -1,70 +1,95 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Photo of the Month</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&display=swap">
-  <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
-  <img class="photo" id="a">
-  <img class="photo" id="b">
-  <div id="title">Photos of <span id="month-name"></span></div>
-  <div id="error"></div>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Photo of the Month</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            rel="stylesheet"
+            href="https://fonts.googleapis.com/css2?family=Sora:wght@400;700&display=swap"
+        />
+        <link rel="stylesheet" href="/static/style.css" />
+    </head>
+    <body>
+        <img class="photo" id="a" />
+        <img class="photo" id="b" />
+        <div id="title">Photos of <span id="month-name"></span></div>
+        <div id="error"></div>
 
-  <script>
-    document.getElementById('month-name').textContent =
-      new Date().toLocaleString('en-US', { month: 'long' });
+        <script>
+            document.getElementById("month-name").textContent =
+                new Date().toLocaleString("en-US", { month: "long" });
 
-    const imgA = document.getElementById('a');
-    const imgB = document.getElementById('b');
-    const errorEl = document.getElementById('error');
-    let current = imgA;
+            const imgA = document.getElementById("a");
+            const imgB = document.getElementById("b");
+            const errorEl = document.getElementById("error");
+            let current = imgA;
 
-    function next() {
-      return current === imgA ? imgB : imgA;
-    }
+            function next() {
+                return current === imgA ? imgB : imgA;
+            }
 
-    async function loadPhoto() {
-      try {
-        const ar = window.innerWidth / window.innerHeight;
-        const res = await fetch(`/api/photo?ar=${ar.toFixed(4)}`);
-        if (!res.ok) throw new Error(await res.text());
-        const { url } = await res.json();
+            async function loadPhoto() {
+                try {
+                    const ar = window.innerWidth / window.innerHeight;
+                    const res = await fetch(`/api/photo?ar=${ar.toFixed(4)}`);
+                    if (!res.ok) throw new Error(await res.text());
+                    const { url } = await res.json();
 
-        if (url === current.src || url === current.getAttribute('src')) return;
+                    if (
+                        url === current.src ||
+                        url === current.getAttribute("src")
+                    )
+                        return;
 
-        const target = next();
-        target.onload = () => {
-          current.classList.remove('active');
-          target.classList.add('active');
-          current = target;
-        };
-        target.src = url;
-        errorEl.style.display = 'none';
-      } catch (e) {
-        errorEl.textContent = 'No photos for this month';
-        errorEl.style.display = 'flex';
-      }
-    }
+                    const target = next();
+                    target.onload = () => {
+                        current.classList.remove("active");
+                        target.classList.add("active");
+                        current = target;
+                    };
+                    target.src = url;
+                    errorEl.style.display = "none";
+                } catch (e) {
+                    errorEl.textContent = "No photos for this month";
+                    errorEl.style.display = "flex";
+                }
+            }
 
-    async function start() {
-      const cfg = await fetch('/api/config').then(r => r.json());
-      const interval = (cfg.interval_seconds || 5) * 1000;
-      await loadPhoto();
-      let expected = Date.now() + interval;
-      setTimeout(function tick() {
-        const drift = Date.now() - expected;
-        loadPhoto();
-        expected += interval;
-        setTimeout(tick, Math.max(0, interval - drift));
-      }, interval);
-    }
+            async function start() {
+                const cfg = await fetch("/api/config").then((r) => r.json());
+                const interval = (cfg.interval_seconds || 5) * 1000;
+                await loadPhoto();
+                let expected = Date.now() + interval;
+                setTimeout(function tick() {
+                    const drift = Date.now() - expected;
+                    loadPhoto();
+                    expected += interval;
+                    setTimeout(tick, Math.max(0, interval - drift));
+                }, interval);
+            }
 
-    start();
-  </script>
-</body>
+            start();
+
+            const titleEl = document.getElementById("title");
+            let hideTimer = setTimeout(
+                () => titleEl.classList.add("hidden"),
+                3000,
+            );
+
+            function showTitle() {
+                titleEl.classList.remove("hidden");
+                clearTimeout(hideTimer);
+                hideTimer = setTimeout(
+                    () => titleEl.classList.add("hidden"),
+                    3000,
+                );
+            }
+
+            document.addEventListener("mousemove", showTitle);
+            document.addEventListener("touchstart", showTitle);
+        </script>
+    </body>
 </html>
